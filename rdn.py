@@ -51,7 +51,7 @@ class RdN(object):
         self.outputs = np.empty(self.nb_outputs, dtype=np.float32)
 
     def calcul_output(self, valeurs_inputs):
-        self.outputs = output(self, valeurs_inputs)
+        self.outputs = calcul_output(self, valeurs_inputs)
 
         return self.outputs
 
@@ -65,13 +65,42 @@ def rdn_aleatoire(repartition, fn_activation, fn_output, derniere_action):
 
     return RdN(data_poids, data_biais, repartition, fn_activation, fn_output, derniere_action)
 
-@njit
-def output(rdn, valeurs_inputs):
-    return np.empty(rdn.nb_outputs, dtype=np.float32)
+@njit(boundscheck=True)
+def calcul_output(rdn, valeurs_inputs):
+    output = np.zeros(rdn.nb_neurones, dtype=np.float32)
+    poids, biais = rdn.poids, rdn.biais
+
+    nb_neurones, fn_activation = rdn.nb_neurones, rdn.fn_activation
+
+    for indice_suivant in range(nb_neurones):
+        for indice_neurone in range(rdn.nb_inputs):
+            output[indice_suivant] += poids[0, indice_neurone, indice_suivant] * valeurs_inputs[indice_neurone]
+        output[indice_suivant] += biais[0, indice_suivant]
+        output[indice_suivant] = fn_activation(output[indice_suivant])
+
+    for indice_couche in range(rdn.nb_hidden - 1):
+        inputs, output = output, np.zeros(rdn.nb_neurones, dtype=np.float32)
+
+        for indice_suivant in range(nb_neurones):
+            for indice_neurone in range(nb_neurones):
+                output[indice_suivant] += poids[indice_couche, indice_neurone, indice_suivant] * inputs[indice_neurone]
+            output[indice_suivant] += biais[indice_couche, indice_suivant]
+            output[indice_suivant] = fn_activation(output[indice_suivant])
+
+    fn_output, indice_output = rdn.fn_output, rdn.nb_hidden - 1
+    inputs, output = output, np.zeros(rdn.nb_outputs, dtype=np.float32)
+
+    for indice_suivant in range(rdn.nb_outputs):
+        for indice_neurone in range(nb_neurones):
+            output[indice_suivant] += poids[indice_output, indice_neurone, indice_suivant] * inputs[indice_neurone]
+        output[indice_suivant] += biais[indice_output, indice_suivant]
+
+    return fn_output(output)
 
 
 if __name__ == '__main__':
-    repartition = (3,2,3,5)
+    repartition = (3,3,3,5)
     rdn = rdn_aleatoire(repartition, sigmoide, sigmoide_output, False)
 
     print(rdn.calcul_output(np.array([1,2,3], dtype=np.float32)))
+    print(rdn.calcul_output(np.array([3,2,3], dtype=np.float32)))
