@@ -4,7 +4,6 @@ from numba import njit, types
 import numpy as np
 
 type_fn_activation = types.FunctionType(types.float32(types.float32))
-type_fn_output = types.FunctionType(types.float32[:](types.float32[:]))
 
 spec = [
     ("poids", types.float32[:, :, :]),
@@ -18,8 +17,7 @@ spec = [
     ("nb_hidden", types.uint8),
 
     ("fn_activation", type_fn_activation),
-    ("fn_output", type_fn_output),
-    ("derniere_action", types.bool),
+    ("derniere_action", types.boolean),
 
     ("outputs", types.float32[:])
 ]
@@ -27,13 +25,9 @@ spec = [
 def sigmoide(x):
     return 1 / (1 + np.exp(-x))
 
-@njit(types.float32[:](types.float32[:]))
-def sigmoide_output(output):
-    return 1 / (1 + np.exp(-output))
-
 @jitclass(spec)
 class RdN(object):
-    def __init__(self, data_poids, data_biais, repartition, fn_activation, fn_output, derniere_action):
+    def __init__(self, data_poids, data_biais, repartition, fn_activation, derniere_action):
         self.poids = data_poids
         self.biais = data_biais
 
@@ -45,7 +39,6 @@ class RdN(object):
         self.nb_hidden = repartition[3] # Nb de couches cachées
 
         self.fn_activation = fn_activation
-        self.fn_output = fn_output
         self.derniere_action = derniere_action
 
         self.outputs = np.empty(self.nb_outputs, dtype=np.float32)
@@ -55,17 +48,26 @@ class RdN(object):
 
         return self.outputs
 
+    def update(self, new_poids, new_biais):
+        self.poids = new_poids
+        self.biais = new_biais
+
+    def copy(self):
+        return RdN(self.poids.copy(), self.biais.copy(), self.repartition, self.fn_activation, self.derniere_action)
+
 @njit
-def rdn_aleatoire(repartition, fn_activation, fn_output, derniere_action):
-    nb_couches = int(repartition[3]) + 1
-    nb_neurones = int(repartition[2])
+def rdn_aleatoire(repartition, fn_activation, derniere_action):
+    nb_inputs, nb_outputs = int(repartition[0]), int(repartition[1])
+    nb_neurones, nb_couches = int(repartition[2]), int(repartition[3]) + 1
 
-    data_poids = np.random.rand(nb_couches, nb_neurones, nb_neurones).astype(np.float32) * 2 - 1
-    data_biais = np.random.rand(nb_couches, nb_neurones).astype(np.float32) * 2 - 1
+    max_neurones = max(nb_inputs, nb_outputs, nb_couches)
 
-    return RdN(data_poids, data_biais, repartition, fn_activation, fn_output, derniere_action)
+    data_poids = np.random.randn(nb_couches, max_neurones, max_neurones).astype(np.float32) * np.float32(0.1)
+    data_biais = np.random.randn(nb_couches, max_neurones).astype(np.float32) * np.float32(0.1)
 
-@njit(boundscheck=True)
+    return RdN(data_poids, data_biais, repartition, fn_activation, derniere_action)
+
+@njit
 def calcul_output(rdn, valeurs_inputs):
     output = np.zeros(rdn.nb_neurones, dtype=np.float32)
     poids, biais = rdn.poids, rdn.biais
@@ -78,7 +80,7 @@ def calcul_output(rdn, valeurs_inputs):
         output[indice_suivant] += biais[0, indice_suivant]
         output[indice_suivant] = fn_activation(output[indice_suivant])
 
-    for indice_couche in range(rdn.nb_hidden - 1):
+    for indice_couche in range(1, rdn.nb_hidden):
         inputs, output = output, np.zeros(rdn.nb_neurones, dtype=np.float32)
 
         for indice_suivant in range(nb_neurones):
@@ -87,7 +89,7 @@ def calcul_output(rdn, valeurs_inputs):
             output[indice_suivant] += biais[indice_couche, indice_suivant]
             output[indice_suivant] = fn_activation(output[indice_suivant])
 
-    fn_output, indice_output = rdn.fn_output, rdn.nb_hidden - 1
+    indice_output = rdn.nb_hidden
     inputs, output = output, np.zeros(rdn.nb_outputs, dtype=np.float32)
 
     for indice_suivant in range(rdn.nb_outputs):
@@ -95,12 +97,11 @@ def calcul_output(rdn, valeurs_inputs):
             output[indice_suivant] += poids[indice_output, indice_neurone, indice_suivant] * inputs[indice_neurone]
         output[indice_suivant] += biais[indice_output, indice_suivant]
 
-    return fn_output(output)
-
+    return output
 
 if __name__ == '__main__':
-    repartition = (3,3,3,5)
-    rdn = rdn_aleatoire(repartition, sigmoide, sigmoide_output, False)
+    repartition = (3,3,1,5)
+    rdn = rdn_aleatoire(repartition, sigmoide, False)
 
     print(rdn.calcul_output(np.array([1,2,3], dtype=np.float32)))
     print(rdn.calcul_output(np.array([3,2,3], dtype=np.float32)))
