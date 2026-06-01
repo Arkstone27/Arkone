@@ -43,6 +43,7 @@ def update_plateau(serpent, besoin_pomme: bool, x_pomme, y_pomme):
 @njit
 def new_partie(rdn: RdN):
     plateau = np.zeros((16,16), np.int16)
+    np.random.seed(67)
 
     x_pomme, y_pomme = 9, 7
     plateau[7, 7], plateau[x_pomme, y_pomme] = 1, 2 # Tête du serpent et pomme
@@ -55,6 +56,7 @@ def new_partie(rdn: RdN):
     while len(serpent) < 256:
         # Action
         dx, dy = action_joueur(rdn, plateau.copy(), tete)
+        dx, dy = 1, 0
         dernier_anneau, besoin_pomme = serpent[-1].copy(), False
 
         # Mouvements des anneaux
