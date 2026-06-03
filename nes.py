@@ -4,7 +4,7 @@ from numba.typed import List
 import numpy as np
 
 from rdn import rdn_aleatoire, sigmoide, RdN
-from exemple_evaluer import evaluer_snake
+from exemple_evaluer import evaluer_simple
 
 # Initialisation
 @njit
@@ -23,7 +23,6 @@ def mutations(rdns, nb_survivants, classement,sigma_poids, sigma_biais):
     choix_parents = np.random.randint(0, nb_survivants, nb_survivants)
 
     indices_meilleurs = classement[:nb_survivants]
-
     for idx in range(nb_survivants, len(rdns)):
         rdn_enfant = rdns[classement[idx]]
         rdn_parent = rdns[indices_meilleurs[np.random.randint(0, nb_survivants)]]
@@ -40,18 +39,13 @@ def evaluation(rdns, fn_evaluer, indice_debut, classement, notes):
 
     for idx in prange(indice_debut, nb_rdns):
         idx_rdn = classement[idx]
-        notes[idx] = fn_evaluer(rdns[idx_rdn])
+        notes[idx_rdn] = fn_evaluer(rdns[idx_rdn])
 
+@njit
 def entrainement_NES(modele_rdn: tuple, fn_evaluer, note_objectif: float):
-    """
-    modele_rdn: [repartition, fn_activation, fn_output, derniere_action]
-    fn_evaluer: Une fonction njit qui prend un rdn de type modele_rdn
-    et qui evaluer le rdn (meilleure note = 0)
-    """
-
     # Initialisation
-    sigma_poids, sigma_biais = np.float32(0.05), np.float32(0.05)
-    rdns, nb_survivants = creation_population(200, modele_rdn), 30
+    sigma_poids, sigma_biais = np.float32(0.05), np.float32(0.005)
+    rdns, nb_survivants = creation_population(100, modele_rdn), 30
 
     notes, classement = np.empty(len(rdns), dtype=np.float32), np.arange(len(rdns))
     evaluation(rdns, fn_evaluer, 0, classement,notes)
@@ -59,18 +53,20 @@ def entrainement_NES(modele_rdn: tuple, fn_evaluer, note_objectif: float):
 
     # Entrainement
     n = 0
-    while note_min >= note_objectif and n < 1000:
+    while note_min >= note_objectif and n < 1_000_000:
         n += 1
 
         classement = np.argsort(notes)
-        mutations(rdns, nb_survivants, classement, sigma_poids, sigma_biais)
-        evaluation(rdns, fn_evaluer, nb_survivants, classement,notes)
-
         note_min = notes[classement[0]]
         print(note_min)
+
+        mutations(rdns, nb_survivants, classement, sigma_poids, sigma_biais)
+        evaluation(rdns, fn_evaluer, nb_survivants, classement, notes)
 
     return rdns[classement[0]]
 
 if __name__ == "__main__":
-    modele_rdn = ((256,4,16,1), sigmoide, False)
-    entrainement_NES(modele_rdn, evaluer_snake, 0.0)
+    modele_rdn = ((2,1,5,3), False)
+    rdn = entrainement_NES(modele_rdn, evaluer_simple, 0.00001)
+
+    print(evaluer_simple(rdn))
