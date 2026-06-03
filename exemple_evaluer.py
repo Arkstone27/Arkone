@@ -19,13 +19,8 @@ def creer_data_set():
     inputs_liste = [[0.2,0.3], [-0.1, 0.7]]
     sorties_attendues = [[0.432], [0.67]]
 
-    inputs = np.empty((2,2), dtype=np.float32)
-    for i in range(len(inputs_liste)):
-        inputs[i] = np.array(inputs_liste[i])
-
-    sorties = np.empty((2,1), dtype=np.float32)
-    for i in range(len(sorties_attendues)):
-        sorties[i] = np.array(sorties_attendues[i])
+    inputs = np.array(inputs_liste, dtype=np.float32)
+    sorties = np.array(sorties_attendues, dtype=np.float32)
 
     return inputs, sorties
 if __name__ == '__main__':
