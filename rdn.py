@@ -33,6 +33,19 @@ def softmax(vecteur):
         somme += valeur
     return vecteur_exp / somme
 
+@njit
+def choix_pondere(liste_probas):
+    valeur_aleatoire = np.random.rand() * liste_probas.sum()
+
+    somme_proba = np.float32(0)
+    for idx in range(len(liste_probas)):
+        somme_proba += liste_probas[idx]
+
+        if valeur_aleatoire < somme_proba:
+            return idx
+
+    return len(liste_probas) - 1
+
 @jitclass(spec)
 class RdN(object):
     def __init__(self, data_poids, data_biais, repartition, derniere_action):
@@ -60,7 +73,7 @@ class RdN(object):
         self.biais = new_biais
 
     def copy(self):
-        return RdN(self.poids.copy(), self.biais.copy(), self.repartition, self.fn_activation, self.derniere_action)
+        return RdN(self.poids.copy(), self.biais.copy(), self.repartition, self.derniere_action)
 
 @njit
 def rdn_aleatoire(repartition, derniere_action):
@@ -112,3 +125,5 @@ if __name__ == '__main__':
 
     print(rdn.calcul_output(np.array([1,2,3], dtype=np.float32)))
     print(rdn.calcul_output(np.array([1,2,3], dtype=np.float32)))
+
+    print(choix_pondere(np.array([0.1,0.5,0.4])))
