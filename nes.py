@@ -3,8 +3,9 @@ from numba.typed import List
 
 import numpy as np
 
-from rdn import rdn_aleatoire, sigmoide, RdN
-from exemple_evaluer import evaluer_simple
+from rdn import rdn_aleatoire
+from exemple_evaluer import evaluer_morpion, partie_morpion, coup_rdn, coup_utilisateur
+
 
 # Initialisation
 @njit
@@ -49,7 +50,7 @@ def entrainement_NES(modele_rdn: tuple, fn_evaluer, note_objectif: float):
 
     notes, classement = np.empty(len(rdns), dtype=np.float32), np.arange(len(rdns))
     evaluation(rdns, fn_evaluer, 0, classement,notes)
-    note_min = notes[classement[0]]
+    note_min, note_avant = notes[classement[0]], notes[classement[0]]
 
     # Entrainement
     n = 0
@@ -58,7 +59,9 @@ def entrainement_NES(modele_rdn: tuple, fn_evaluer, note_objectif: float):
 
         classement = np.argsort(notes)
         note_min = notes[classement[0]]
-        print(note_min)
+        if note_avant > note_min:
+            print(n, note_min)
+        note_avant = note_min
 
         mutations(rdns, nb_survivants, classement, sigma_poids, sigma_biais)
         evaluation(rdns, fn_evaluer, nb_survivants, classement, notes)
@@ -66,7 +69,7 @@ def entrainement_NES(modele_rdn: tuple, fn_evaluer, note_objectif: float):
     return rdns[classement[0]]
 
 if __name__ == "__main__":
-    modele_rdn = ((2,1,5,3), False)
-    rdn = entrainement_NES(modele_rdn, evaluer_simple, 0.00001)
+    modele_rdn = ((10,9,20,5), False)
+    rdn = entrainement_NES(modele_rdn, evaluer_morpion, 0.21)
 
-    print(evaluer_simple(rdn))
+    print(partie_morpion(coup_rdn, coup_utilisateur, rdn))
