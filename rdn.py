@@ -46,6 +46,15 @@ def choix_pondere(liste_probas):
 
     return len(liste_probas) - 1
 
+@njit
+def choix_max(liste_probas):
+    indice_max, valeur_max = 0, 0
+    for indice in range(len(liste_probas)):
+        if liste_probas[indice] > valeur_max:
+            indice_max, valeur_max = indice, liste_probas[indice]
+
+    return indice_max
+
 @jitclass(spec)
 class RdN(object):
     def __init__(self, data_poids, data_biais, repartition, derniere_action):

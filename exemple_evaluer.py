@@ -1,13 +1,16 @@
 from numba import types, objmode, njit
-from numba.typed import List
+from numba.typed import List, Dict
 
 import numpy as np
 
-from rdn import rdn_aleatoire, sigmoide, RdN, softmax, choix_pondere
+from rdn import rdn_aleatoire, sigmoide,softmax, choix_max
 
 import warnings
 from numba.core.errors import NumbaExperimentalFeatureWarning
 warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
+
+type_grille = types.Tuple([types.int8] * 10)
+type_coup = types.Tuple((types.int8, types.int8))
 
 @njit
 def evaluer_simple(rdn):
@@ -22,40 +25,57 @@ def evaluer_simple(rdn):
 @njit
 def evaluer_morpion(rdn):
 
+    cache = Dict.empty(key_type=type_grille, value_type=type_coup)
     nb_parties, note = 100, 0
     for _ in range(nb_parties):
-        if partie_morpion(coup_rdn, coup_aleatoire, rdn) == 0:
+        if partie_morpion(coup_rdn, coup_aleatoire, rdn, cache) == 0:
             note += 1
 
-        if partie_morpion(coup_aleatoire, coup_aleatoire, rdn) == 1:
-            note += 1
+        # if partie_morpion(coup_aleatoire, coup_aleatoire, rdn) == 1:
+        #     note += 1
 
-    return note / (nb_parties*2)
+    return note / nb_parties
 
 @njit
-def coup_rdn(grille, joueur, rdn):
-    inputs = np.empty(10, dtype=np.float32)
-
+def coup_rdn(grille, joueur, rdn, cache):
     grille_plat = grille.ravel()
+    tuple_inputs = (joueur, grille_plat[0], grille_plat[1], grille_plat[2],
+                    grille_plat[3], grille_plat[4], grille_plat[5],
+                    grille_plat[6], grille_plat[7], grille_plat[8])
+    if tuple_inputs in cache:
+        return cache[tuple_inputs]
+
+    inputs = np.empty(10, dtype=np.float32)
     inputs[0], inputs[1:] = joueur, grille_plat
 
     output = softmax(rdn.calcul_output(inputs))
-    output[np.where(grille_plat != -1)] = 0
+    for i in range(9):
+        if grille_plat[i] != -1:
+            output[i] = 0
 
-    indice_case = choix_pondere(output)
-    cases = ((0,0),(0,1),(0,2), (1,0),(1,1),(1,2), (2,0),(2,1),(2,2))
-    return cases[indice_case]
+    indice_case = choix_max(output)
+    x = indice_case // 3
+    y = indice_case % 3
 
-@njit
-def coup_aleatoire(grille, joueur, rdn):
-    x, y = np.random.randint(0,3,2)
-    while grille[x, y] != -1:
-        x, y = np.random.randint(0, 3, 2)
-
+    cache[tuple_inputs] = (x,y)
     return x, y
 
 @njit
-def coup_utilisateur(grille, joueur, rdn):
+def coup_aleatoire(grille, joueur, rdn, cache):
+    libres_x = np.empty(9, dtype=np.int8)
+    libres_y = np.empty(9, dtype=np.int8)
+    compteur = 0
+
+    for x in range(3):
+        for y in range(3):
+            if grille[x, y] == -1:
+                libres_x[compteur], libres_y[compteur] = x, y
+                compteur += 1
+    choix_case = np.random.randint(0, compteur)
+    return libres_x[choix_case], libres_y[choix_case]
+
+@njit
+def coup_utilisateur(grille, joueur, rdn, cache):
     grille_plat = grille.ravel()
 
     with objmode(indice_case=types.int8):
@@ -92,7 +112,7 @@ def grille_gagnante(grille, joueur):
     return False
 
 @njit
-def partie_morpion(joueur_0, joueur_1, rdn):
+def partie_morpion(joueur_0, joueur_1, rdn, cache):
     grille = -np.ones((3,3), np.int8)
 
     nb_tours, joueur = 0, 0
@@ -100,9 +120,9 @@ def partie_morpion(joueur_0, joueur_1, rdn):
 
     while nb_tours < 9:
         if joueur == 0:
-            x_coup, y_coup = joueur_0(grille, joueur, rdn)
+            x_coup, y_coup = joueur_0(grille, joueur, rdn, cache)
         else:
-            x_coup, y_coup = joueur_1(grille, joueur, rdn)
+            x_coup, y_coup = joueur_1(grille, joueur, rdn, cache)
 
         grille[x_coup, y_coup] = joueur
         if 4 < nb_tours and grille_gagnante(grille, joueur):
@@ -126,5 +146,5 @@ if __name__ == '__main__':
     rdn = rdn_aleatoire(repartition, False)
 
     print(evaluer_morpion(rdn))
-    print(partie_morpion(coup_rdn, coup_utilisateur, rdn))
+    print(partie_morpion(coup_rdn, coup_utilisateur, rdn, Dict.empty(key_type=type_grille, value_type=type_coup)))
 
